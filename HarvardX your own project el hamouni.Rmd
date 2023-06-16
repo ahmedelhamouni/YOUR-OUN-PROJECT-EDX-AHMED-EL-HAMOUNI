@@ -1,0 +1,547 @@
+---
+title: "HarvardX : Choose Your Own"
+subtitle: "HarvardX : CHOOSE YOUR OWN AHMED EL HAMOUNI Health Diabetes"
+author: "AHMED EL HAMOUNI"
+output: 
+  pdf_document: 
+    toc: yes
+---
+
+\newpage
+
+# Introduction
+
+## The view
+
+This document pertains to the HarvardX PH125.9x Data Science: Capstone certification and focuses on the selected topic of Diabetes Binary Classification. For this project, we will utilize a dataset available at 
+https://github.com/ahmedelhamouni/EL-HAMOUNI-AHMED-Your-Own-Project-edx-/blob/main/diabetes.csv.
+
+
+The objective of this project is to develop a machine learning model that can predict whether a woman has diabetes based on physiological variables. Given the binary nature of the classification problem, we will evaluate the performance of the models using two metrics: accuracy and f1-score. These metrics will help us assess the model's ability to correctly classify instances and its overall predictive power.
+
+
+## Dataset
+
+The dataset utilized in this project is obtained from the National Institute of Diabetes and Digestive and Kidney Diseases. It encompasses physiological attributes collected from women aged 21 years and above belonging to a specific community. The dataset comprises several variables that will be employed in our analysis, enabling us to explore and derive insights from the collected physiological data  
+
+-  **Pregnancies** : times a woman has been pregnant.
+-  **Glucose** : glucose level in blood.
+-  **BloodPressure** : blood pressure measurement.
+-  **SkinThickness** : thickness of their skin.
+-  **Insulin** : insulin level in blood.
+-  **BMI** : body mass index.
+-  **DiabetesPedigreeFunction** : diabetes percentage.
+-  **Age** : age of the woman
+-  **Outcome** : 1 if the woman has diabetes, 0 otherwise.
+
+The first eight variables will be used to predict the ninth one.
+
+The data set is available here : https://github.com/ahmedelhamouni/EL-HAMOUNI-AHMED-Your-Own-Project-edx-/blob/main/diabetes.csv
+
+\newpage
+
+# Analysis
+
+Once we downloaded the data set, we import it and we compute the first 5 lines :
+```{r libraries importation,echo=FALSE,message=FALSE,warning=FALSE}
+if(!require(readr)) install.packages('readr') else library(readr)
+if(!require(tidyverse)) install.packages('tidyverse') else library(tidyverse)
+if(!require(dplyr)) install.packages('dplyr') else library(dplyr)
+if(!require(caret)) install.packages('caret') else library(caret)
+if(!require(corrplot)) install.packages('corrplot') else library(corrplot)
+if(!require(ggplot2)) install.packages('ggplot2') else library(ggplot2)
+if(!require(rpart)) install.packages('rpart') else library(rpart)
+if(!require(rpart.plot)) install.packages('rpart.plot') else library(rpart.plot)
+if(!require(reshape2)) install.packages('reshape2') else library(reshape2)
+diabetes <- data.frame(read_csv("diabetes.csv"))
+
+```
+```{r head_df, echo=FALSE,message=FALSE,warning=FALSE}
+head(diabetes) %>% knitr::kable()
+```
+
+Now that we have a view on what the data set looks like, we compute some useful statistics :
+
+- data set dimensions
+
+```{r dimensions, echo=FALSE,message=FALSE,warning=FALSE}
+data.frame(tibble("Rows"=dim(diabetes)[1],
+                  "Columns"=dim(diabetes)[2])) %>% 
+  knitr::kable()
+```
+
+- variables statistics 
+
+```{r summary, echo=FALSE,message=FALSE,warning=FALSE}
+summary(diabetes[1:4]) %>% knitr::kable()
+summary(diabetes[5:8]) %>% knitr::kable()
+```
+
+- structure of the data set
+
+```{r str,echo=FALSE,message=FALSE,warning=FALSE}
+str(diabetes) 
+```
+
+\newpage
+- proportion of Outcome values
+
+```{r outcome_proportion, echo=FALSE,message=FALSE,warning=FALSE,fig.width=4,fig.height=4,fig.align="center"}
+diabetes %>% group_by(Outcome) %>% 
+  summarise(N=n()*100/dim(diabetes)[1]) %>%
+  ggplot(aes(x=Outcome,y=N,fill=Outcome))+ 
+  geom_text(aes(label=paste(round(N,1),"%"),vjust=-0.25,fontface='bold'))+
+  geom_bar(stat = 'identity',color='black') +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "") +
+  scale_x_discrete(limits=c(0,1)) +
+  ggtitle("Proportions of outcomes")
+```
+
+- variables density plot
+
+```{r variables_distribution,echo=FALSE,message=FALSE,warning=FALSE,fig.align="center",fig.height=4,fig.width=7}
+ggplot(melt(diabetes),aes(x=value,fill=variable)) + 
+  geom_density() + 
+  facet_wrap(~variable,scale="free") + 
+  theme(legend.position = "") + 
+  ggtitle("Density plot for every variables")
+```
+
+\newpage
+- correlation between variables
+
+```{r correlation_plot, echo=FALSE,message=FALSE,warning=FALSE}
+diabetes_abb <- diabetes
+diabetes_abb_names <- c("P","G","BP","ST","I","BMI","DPF","A","OC")
+colnames(diabetes_abb) <- diabetes_abb_names
+
+cor_diabetes <- cor(diabetes_abb,method=c("spearman"))
+corrplot(cor_diabetes, 
+         method = 'color',
+         addCoef.col = "black",
+         addgrid.col = "grey",
+         diag = FALSE,
+         tl.pos = "d",
+         tl.col = "black",
+         number.cex = 0.5
+         )
+```
+
+- any NaN in the set ? 
+
+```{r nan, echo=TRUE,message=FALSE,message=FALSE,warning=FALSE}
+sum(is.na(diabetes))
+
+```
+
+Based on these findings, we can extract the following information from the dataset:
+•	All variables in the dataset are numerical. The only issue we need to address is that the "Outcome" variable is currently numerical instead of a factor or categorical variable.
+•	The dataset is clean, with no missing values (NaN) present.
+•	Approximately one-third of the patients in the dataset are classified as sick.
+•	There doesn't seem to be any aberration or anomalies in the distribution of variables.
+•	The variables "Glucose," "BloodPressure," and "BMI" exhibit distributions that are close to normal, although extreme values in "Glucose" may contradict this observation.
+•	There are no negative correlations between variables.
+•	The correlation between variables and the "Outcome" variable ranges from 0.07 (indicating no significant correlation) to 0.48 (indicating moderate correlation).
+•	In conclusion, the dataset is clean with no data problems, and the absence of strong correlations between variables makes the model-building process interesting and challenging.
+
+
+\newpage
+
+# Model building
+
+Before we start our construction, we need to separate our set in 3 parts :
+
+- the train set : to train our models
+- the test set : to test our models performances
+- the validation : to use it for the final model
+
+We manage to do this with this piece of code :
+
+```{r train_test_validation,echo=TRUE }
+set.seed(1)
+X <- diabetes %>% select(-Outcome)
+y <- as.factor(diabetes$Outcome)
+
+## Validation set
+test_validation <- createDataPartition(y, times = 1, p = 0.9, list = FALSE)
+validation <- diabetes[-test_validation, ]
+test_index <- createDataPartition(y, times = 1, p = 0.8, list = FALSE)
+
+## Train & Test set
+train <- diabetes[test_index, ]
+test <- diabetes[-test_index, ]
+
+# Outcome as factor
+train$Outcome <- as.factor(train$Outcome)
+test$Outcome <- as.factor(test$Outcome)
+validation$Outcome <- as.factor(validation$Outcome)
+```
+
+```{r ttv_dim, echo=FALSE}
+data.frame(tibble("set"=c("train","test","validation"),"length"=c(dim(train)[1],dim(test)[1],dim(validation)[1]))) %>% knitr::kable()
+```
+
+Then, we can try our first model.
+
+## First model
+
+This initial model will be a "glm" one. In fact, what matters is the metrics of the model. To compute the accuracy and the f1-score on a first prediction with this code :
+
+```{r first_fit,echo=TRUE}
+# fitting
+fit <- train(Outcome~.,
+             data=train,
+             method="glm")
+
+# predict
+pred <- predict(fit,test)
+
+# confusion matrix
+cm <- confusionMatrix(pred,test$Outcome,mode="everything",positive="1")
+
+# accuracy
+cm[3]$overall[1]
+# f1-score
+cm[4]$byClass[7]
+```
+
+For a first model, without any optimization, results are pretty positive. 
+Now we have the methodology to fit and predict with a model, we can create a *function* to get a tibble with metrics of the models, on the train and the test set. 
+
+```{r model_function}
+model_result <- function(method){
+  
+  # cross-validation control
+  ctrl <- trainControl(method = "repeatedcv",
+                       number = 10,
+                       repeats = 3)
+                       
+  # fitting
+  fit <- train(Outcome~.,
+               data=train,
+               trControl = ctrl,
+               method=method)
+
+  # --- TEST ---
+  # predict
+  pred_test <- predict(fit,test)
+  
+  # confusion matrix
+  cm_test <- confusionMatrix(pred_test,test$Outcome,mode="everything",positive="1")
+  
+  # accuracy
+  accuracy_test <- round(cm_test[3]$overall[1],3)
+  # f1-score
+  f1_score_test <- round(cm_test[4]$byClass[7],3)
+  
+  # --- TRAIN ---
+  # predict
+  pred_train <- predict(fit,train)
+  
+  # confusion matrix
+  cm_train <- confusionMatrix(pred_train,train$Outcome,mode="everything",positive="1")
+  
+  # accuracy
+  accuracy_train <- round(cm_train[3]$overall[1],3)
+  # f1-score
+  f1_score_train <- round(cm_train[4]$byClass[7],3)
+  
+  
+  # tibble with results
+  result <- tibble("model"=method,
+                   "train_acc"=accuracy_train,
+                   "test_acc"=accuracy_test,
+                   "acc_diff"=round(abs(accuracy_train-accuracy_test),5),
+                   "train_f1"=f1_score_train,
+                   "test_f1"=f1_score_test,
+                   "f1_diff"=round(abs(f1_score_train-f1_score_test),5)
+                   )
+  return(result)
+}
+```
+
+## Finding the best model
+
+In our quest to find the best model, we will experiment with various models from a predefined list. We have selected five popular binary classification models from the caret package, namely:
+1.	svmLinear: Support Vector Machines with a Linear Kernel.
+2.	rf: Random Forest.
+3.	glm: Generalized Linear Model (initial attempt).
+4.	glmboost: Boosted Generalized Linear Model (tunable glm).
+5.	lda: Linear Discriminant Analysis.
+We will now proceed to analyze and evaluate the performance metrics returned by these models. Please note that this step may take a few minutes to complete as we carefully assess the capabilities and suitability of each model for our specific task.
+
+
+We proceed to study the metrics they return (this step can take few minutes to achieve):
+
+```{r model_finding, echo=FALSE,warning=FALSE,message=FALSE, }
+models <- c("svmLinear","rf","glm","glmboost","lda")
+final <- data.frame()
+i <- 0
+for (model in models){
+  #print(paste("fitting :",model))
+  score <- data.frame(model_result(model))
+  final <- bind_rows(final,score)
+  i <- i+1
+  #print(paste("[",i,"/",length(models),"] |", model, "fitted"))
+}
+
+final <- final %>% mutate(ratio = round(abs(test_acc/(acc_diff+0.2)),2))
+final_table <- final[order(desc(final$ratio)),]
+print(final_table)
+```
+
+Based on the information you provided, it seems that you have a results table with columns labeled "diff" and "ratio" in addition to train and test values of a metric. Here's an explanation of what these columns represent:
+1.	"Diff" Columns: These columns represent the differences between the train and test values of the metric. The purpose of including these columns is to help identify cases of overfitting. Overfitting occurs when a model performs well on the training data but fails to generalize to unseen data (test data). By calculating the difference between the train and test values, you can get an idea of how much the model's performance is affected by overfitting. If the differences are significant, it suggests that the model may not be able to generalize well.
+2.	"Ratio" Columns: These columns are a homemade variable that aims to determine the best model based on the accuracy rate and the ratio. While you haven't provided specific details about how this ratio is calculated, it appears to be a measure of model performance that takes into account the accuracy rate and another factor, possibly the difference between train and test values. The purpose of this homemade variable is to provide a holistic view of model performance and assist in determining which model is the best among the alternatives.
+In summary, the "diff" columns help identify potential overfitting cases by comparing the performance of the model on training and test data, while the "ratio" columns are a custom metric that combines accuracy rate and another factor to assess the relative performance of different models.
+          In summary, with the exception of "rf" (Random Forest), all the models show results within a similar range. Considering that "glm" (Generalized Linear Model) and "lda" (Linear Discriminant Analysis) do not have tunable values, we need to decide between "glmboost" and "svmLinear" models. To make an informed decision, we will proceed with tuning both models to determine which one performs better.
+
+\newpage
+
+## Tuning glmBoost
+
+To optimize the glmBoost method, we need to tune two parameters: mstop and prune. The prune parameter is a binary value that, when set to "yes," automatically selects an appropriate mstop value. However, since we want to manually tune this parameter, we will set it as "no."
+For the mstop parameter, we will explore a range from 50 to 500 with increments of 10. To assess the performance of different mstop values, we will introduce a new metric called "ratio," which is calculated as the product of accuracy and f1-score. This metric allows us to identify the best trade-off between accuracy and f1-score by plotting the ratio against the mstop values. The higher the ratio, the better the model performance.
+By examining the ratio values across different mstop values, we can determine the optimal mstop value that maximizes the ratio and achieves the desired balance between accuracy and f1-score.
+
+
+```{r mstop_finding, echo=FALSE, warning=FALSE, message=FALSE}
+accuracies <- list()
+f1_scores <- list()
+mstops <- list()
+iterations <- seq(50,500,10)
+
+ctrl <- trainControl(method = "repeatedcv",number = 10,repeats = 3)
+for (i in iterations){
+  grid = expand.grid(mstop = i,
+                      prune="no")
+  fit <- train(Outcome~.,
+                  data=train,
+                  trControl=ctrl,
+                  method="glmboost",
+                  tuneGrid=grid)
+  pred <- predict(fit,test)
+  
+  cm <- confusionMatrix(pred,test$Outcome,mode="everything",positive="1")
+  
+  mstops <- append(mstops,i)
+  accuracies <- append(accuracies,accuracy_test <- cm[3]$overall[1])
+  f1_scores <- append(f1_scores,accuracy_test <- cm[4]$byClass[7])
+  #print(paste(round((i-min(iterations))*100/(max(iterations)-min(iterations))),"% completed"))
+}
+```
+
+```{r mstop_plot,echo=FALSE}
+mstops_tuning <- data.frame(tibble("mstop"=mstops,"accuracy"=accuracies,"f1_score"=f1_scores))
+mstops_tuning <- as.data.frame(lapply(mstops_tuning, unlist))
+mstops_tuning <- mstops_tuning %>% mutate(ratio = (accuracy*f1_score))
+ggplot(mstops_tuning,aes(x=mstop,y=ratio)) + 
+  geom_line() +
+  ggtitle(paste("Ratio per mstop values. Max for mstop =",
+                mstops_tuning$mstop[which.max(mstops_tuning$ratio)]))
+```
+
+We have the mstop value that maximize the ratio, we can now plot the result for an optimized glmboost model : 
+
+```{r glm_opt, echo=FALSE}
+grid_opt <- expand.grid(mstop = mstops_tuning$mstop[which.max(mstops_tuning$ratio)],
+                       prune = 'no')
+
+fit_opt <- train(Outcome~.,
+                 data=train,
+                 trControl=ctrl,
+                 method="glmboost",
+                 tuneGrid=grid_opt) 
+
+pred_opt <- predict(fit_opt,test)
+
+cm_opt <- confusionMatrix(pred_opt,
+                          test$Outcome,
+                          mode="everything",
+                          positive="1")
+
+glm_opt_result <- data.frame(tibble("model"    = "glmBoost",
+                                    "accuracy" = round(cm_opt[3]$overall[1],3),
+                                    "f1_score" = round(cm_opt[4]$byClass[7],3)))
+print(glm_opt_result) %>% knitr::kable()
+```
+
+The accuracy is average, and the f1-score is not really higher the other models we tried. We will tune the svlLinear model to see if we get better results.
+
+
+\newpage 
+
+## Tuning svmLinear
+
+The tuning process for svmLinear will follow a similar approach to glmBoost. However, there is only one parameter to tune in svmLinear, which is C. We will explore a range of values from 0.01 to 2 with a step size of 0.02 to determine the optimal C value.
+Similar to before, we will plot the ratio metric, which is calculated as the product of accuracy and f1-score, against the different C values. This will allow us to assess the model's performance for each C value and identify the C value that maximizes the ratio.
+By examining the ratio values across the range of C values, we can determine the most suitable C value that leads to the best compromise between accuracy and f1-score in the svmLinear model.
+
+
+```{r c_finding, echo=FALSE,message=FALSE,warning=FALSE}
+accuracies <- list()
+f1_scores <- list()
+c <- list()
+
+iterations <- seq(0.01,5,0.05)
+
+ctrl <- trainControl(method = "repeatedcv",number = 10,repeats = 3)
+for (i in iterations){
+  grid = expand.grid(C = i)
+  fit <- train(Outcome~.,
+               data=train,
+               trControl=ctrl,
+               method="svmLinear",
+               tuneGrid=grid)
+  pred <- predict(fit,test)
+  
+  cm <- confusionMatrix(pred,test$Outcome,mode="everything",positive="1")
+  
+  c <- append(c,i)
+  accuracies <- append(accuracies,accuracy_test <- cm[3]$overall[1])
+  f1_scores <- append(f1_scores,accuracy_test <- cm[4]$byClass[7])
+  #print(paste(round((i-min(iterations))*100/(max(iterations)-min(iterations))),"% completed"))
+}
+```
+
+```{r c_plot,echo=FALSE}
+c_tuning <- data.frame(tibble("C"=c,"accuracy"=accuracies,"f1_score"=f1_scores))
+c_tuning <- as.data.frame(lapply(c_tuning, unlist))
+c_tuning <- c_tuning %>% mutate(ratio = (accuracy*f1_score))
+ggplot(c_tuning,aes(x=C,y=ratio)) + 
+  geom_line() +
+  ggtitle(paste("Ratio per C values. Max for C = ",
+                c_tuning$C[which.max(c_tuning$ratio)]))
+```
+
+With this C value, we have these results for svmLinear :
+
+```{r svm_opt,echo=FALSE}
+grid_svm <- expand.grid(C = c_tuning$C[which.max(c_tuning$ratio)])
+
+fit_svm <- train(Outcome~.,
+                 data=train,
+                 trControl=ctrl,
+                 method="svmLinear",
+                 tuneGrid=grid_svm) 
+
+pred_svm <- predict(fit_svm,test)
+
+cm_svm <- confusionMatrix(pred_svm,
+                          test$Outcome,
+                          mode="everything",
+                          positive="1")
+
+svm_opt_result <- data.frame(tibble("model"    = "svmLinear",
+                                    "accuracy" = round(cm_svm[3]$overall[1],3),
+                                    "f1_score" = round(cm_svm[4]$byClass[7],3)))
+print(svm_opt_result)
+```
+
+Accuracy and F1-score are a little better than the glmboost model. We will analyze the results ine the next part.
+
+\newpage 
+
+# Results
+
+Model finding results : 
+
+```{r mf_results, echo=FALSE}
+print(final_table)
+```
+
+Tuning results : 
+
+```{r tuning_r, echo=FALSE}
+final_results <- bind_rows(glm_opt_result,svm_opt_result) %>% knitr::kable()
+print(final_results)
+```
+
+Among all the models we've tried, svmLinear tends to be the best. However, we can see that, unlike glmBoost that receive a growth in its metrics through tuning, svmLinear remains the same. Now we can recreate a svmLinear model from scratch to get all the information we can extract on this model performance.Based on our experimentation with various models, svmLinear appears to be the most promising. However, it is worth noting that while glmBoost demonstrated improvements in its metrics through tuning, svmLinear's performance remained consistent.
+To gain a comprehensive understanding of the svmLinear model's performance, we will recreate the model from scratch. By doing so, we can gather all the available information and insights regarding the model's performance. This will allow us to assess its performance in its default configuration and explore any additional details that can be extracted from the model.
+
+
+```{r svm_final, echo=FALSE}
+svm_fit <- train(Outcome~., data=train,trControl=ctrl,method="svmLinear")
+svm_predict <- predict(svm_fit,validation)
+svm_cm <- confusionMatrix(svm_predict,validation$Outcome,
+                          mode="everything",
+                          positive="1")
+
+svm_final_results <- data.frame(tibble("Model" = "svmLinear",
+                                       "Accuracy" = round(svm_cm[3]$overall[1],3),
+                                       "F1-score" = round(svm_cm[4]$byClass[7],3),
+                                       "Precision" = round(svm_cm[4]$byClass[5],3),
+                                       "Recall" = round(svm_cm[4]$byClass[6],3),
+                                       "Sensitivity" = round(svm_cm[4]$byClass[1],3),
+                                       "Specificity" = round(svm_cm[4]$byClass[2],3)
+                                       )) %>% knitr::kable()
+print(svm_final_results)
+```
+Results on the validation set are clearly better. Let's analyze it metric per metric:
+
+    Accuracy: We saw this one earlier, and it is higher than what we obtained initially, indicating that this model is stronger.
+    F1-score: It remains almost the same, so we can't conclude that it has improved.
+    Precision and Recall: In fact, the F1-score is a combination of precision and recall, which is why studying the F1-score is important.
+    Sensitivity: It is at a good level, but considering it is defined as the "true positive rate" and this is a medical case, it remains somewhat low.
+    Specificity: This metric is exceptionally high, defined as the "true negative rate," which is beneficial in this case.
+
+To better understand the last two metrics, we can translate specificity as the "proportion of truly sick people among all the individuals diagnosed with diabetes" and sensitivity as the "proportion of individuals who are truly healthy among all those diagnosed as negative." Now we can see why high sensitivity is crucial in a medical study: we cannot afford misdiagnosing individuals. Specificity is also important because we want to avoid healthy individuals undergoing unnecessary treatments due to misdiagnosis.
+
+Another metric that provides clear insight into how the predictions performed on the validation set is the "confusion matrix":
+
+```{r svm_cm,echo=FALSE}
+print(svm_cm[2]$table)
+```
+
+\newpage
+
+# Conclusion
+
+In summary, from a machine learning perspective, the final model we have developed shows promising metrics, indicating its usefulness. However, in the context of a medical case, there are certain limitations that prevent its practical application. Here are a few key points to explain this:
+1.	Limited Data: Although the dataset is usable, for a highly accurate and precise project, a larger dataset would be required. The current dataset is limited in size and scope, which may affect the model's ability to generalize well to new cases.
+2.	Niche Target Audience: The dataset specifically focuses on women from a specific area, making it applicable to a relatively narrow population. This restricts the model's usability in broader medical contexts.
+3.	Weak Variable Correlation: The variables in the dataset do not exhibit strong correlations with the outcome, which poses a challenge for achieving higher predictive accuracy. This lack of strong relationships between the variables and the outcome hinders the model's performance.
+Furthermore, to improve the prediction model, employing Deep Learning and Neural Networks could be considered. However, this would require advanced knowledge and expertise beyond traditional machine learning techniques. Deep Learning and Neural Networks operate at a different level of data science and extend beyond the scope of conventional machine learning approaches.
+
+
+##  decision tree
+
+Since data scientists are not only responsible for building predictive models but also for creating understandable reports, I have decided to use a different model to provide a more intuitive understanding of the predictions: the decision tree. By fitting the decision tree model on the training dataset, we can obtain information about the importance of different features used by the model. Additionally, we can visualize the decision tree, which provides insights into how the model predicts classes.
+
+```{r feature_importance, echo=FALSE,warning=FALSE,message=FALSE}
+tree <- rpart(Outcome~.,data=train)
+importances <- data.frame(tree$variable.importance)
+feature_importance <- data.frame(tibble("feature"=rownames(importances),
+                                        "importance"=importances$tree.variable.importance))
+
+feature_importance <- feature_importance[order(desc(feature_importance$importance)),]
+feature_importance %>% 
+  arrange(desc(importance)) %>%
+  mutate(feature=factor(feature,levels=feature)) %>%
+  ggplot(aes(y=importance,x=feature,fill=feature)) + 
+  geom_col() + 
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle=45
+                                   ,hjust=1))+
+  ggtitle("Features importance")
+```
+\newpage
+
+```{r decision_tree_plot, echo=FALSE,fig.height=9,fig.width=6,fig.align="center"}
+rpart.plot(tree, 
+           type = 5, 
+           extra = 100,
+           box.palette = "GnRd",
+           main="Decision tree")
+```
+
